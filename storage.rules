@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /kyc_documents/{fileName} {
+      // Filename is formatted as "userId_UUID.jpg". 
+      // Only the document owner or the Admin (t0ZqQsbmcyfmYsT6YxxzeaRaiSp2) has read permissions.
+      allow read: if request.auth != null && (fileName.startsWith(request.auth.uid + "_") || request.auth.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2");
+      allow write: if request.auth != null && fileName.startsWith(request.auth.uid + "_");
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "CloudMineCrypto",
+  "description": "A secure cryptocurrency cloud mining simulator app featuring live blockchain price feeds, custom mining speeds, and a secure local authentication and withdrawal ledger.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

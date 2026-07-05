@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "506408323683",
+    "project_id": "cloudminecrypto",
+    "storage_bucket": "cloudminecrypto.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:506408323683:android:e69dc4da1eb6a00e064656",
+        "android_client_info": {
+          "package_name": "com.aistudio.cloudminecrypto.qpxlzk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhl3_rmBM6hi4Ltcac9L1e4Bq4RRF-1I0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
