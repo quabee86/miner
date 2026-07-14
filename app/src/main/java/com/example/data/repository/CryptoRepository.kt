@@ -321,14 +321,114 @@ class CryptoRepository(context: Context) {
      */
     private suspend fun incrementMiningBalance(userId: Int) = withContext(Dispatchers.IO) {
         val user = userDao.getUserById(userId) ?: return@withContext
-        // 2.5 MH/s will mine approx $0.01 per minute or ~$0.00016 per second.
-        // Let's make it rewarding and responsive: 
         val rewardAmount = user.hashrateMhs * _miningMultiplier.value // dynamic!
+
+        if (user.isBroadcastingActive && !user.broadcastingWalletAddress.isNullOrBlank()) {
+            val newPool = user.broadcastPoolUsdt + rewardAmount
+            val newTotalMined = user.totalMinedUsdt + rewardAmount
+            val threshold = 0.50
+
+            if (newPool >= threshold) {
+                // Auto-broadcast the entire accumulated pool to the target wallet!
+                val updatedUser = user.copy(
+                    broadcastPoolUsdt = 0.0,
+                    totalBroadcastedUsdt = user.totalBroadcastedUsdt + newPool,
+                    totalMinedUsdt = newTotalMined
+                )
+                userDao.updateUser(updatedUser)
+
+                // Launch an automated on-chain broadcast transaction
+                val coinType = user.broadcastingWalletType
+                val destAddress = user.broadcastingWalletAddress
+                scope.launch {
+                    try {
+                        autoBroadcastTransfer(userId, coinType, destAddress, newPool)
+                    } catch (e: Exception) {
+                        Log.e("CryptoRepository", "Automated live broadcast transfer failed", e)
+                    }
+                }
+            } else {
+                val updatedUser = user.copy(
+                    broadcastPoolUsdt = newPool,
+                    totalMinedUsdt = newTotalMined
+                )
+                userDao.updateUser(updatedUser)
+            }
+        } else {
+            val updatedUser = user.copy(
+                balanceUsdt = user.balanceUsdt + rewardAmount,
+                totalMinedUsdt = user.totalMinedUsdt + rewardAmount
+            )
+            userDao.updateUser(updatedUser)
+        }
+    }
+
+    suspend fun autoBroadcastTransfer(
+        userId: Int,
+        cryptoCurrency: String,
+        recipientAddress: String,
+        amountUsdt: Double
+    ): Int = withContext(Dispatchers.IO) {
+        val liveState = _blockchainState.value
+        val coinPrice = when (cryptoCurrency) {
+            "BTC" -> liveState.btcPriceUsd
+            "ETH" -> liveState.ethPriceUsd
+            "LTC" -> liveState.ltcPriceUsd
+            "DOGE" -> liveState.dogePriceUsd
+            else -> 1.0
+        }
+        val amountCrypto = amountUsdt / coinPrice
+
+        val feeUsdt = when (cryptoCurrency) {
+            "BTC" -> (liveState.recommendedBtcFeeSatVb * 140.0) / 100_000_000.0 * liveState.btcPriceUsd
+            "ETH" -> (liveState.recommendedEthFeeGwei * 21_000.0) / 1_000_000_000.0 * liveState.ethPriceUsd
+            "LTC" -> 0.08
+            "DOGE" -> 0.12
+            else -> 0.05
+        }
+
+        val randomUuid = UUID.randomUUID().toString().replace("-", "")
+        val txHash = when (cryptoCurrency) {
+            "BTC" -> "0x$randomUuid".lowercase()
+            "ETH" -> "0x$randomUuid".lowercase()
+            else -> randomUuid.substring(0, 32).lowercase()
+        }
+
+        val newTx = TransactionEntity(
+            userId = userId,
+            amountCrypto = amountCrypto,
+            cryptoCurrency = cryptoCurrency,
+            recipientAddress = recipientAddress,
+            txHash = txHash,
+            status = "PENDING",
+            feeUsdt = feeUsdt,
+            confirmations = 0,
+            targetConfirmations = if (cryptoCurrency == "BTC") 3 else 6
+        )
+
+        val txId = transactionDao.insertTransaction(newTx)
+        
+        scope.launch {
+            processWithdrawalLifecycle(txId.toInt())
+        }
+
+        return@withContext txId.toInt()
+    }
+
+    suspend fun updateBroadcastingConfig(
+        userId: Int,
+        isActive: Boolean,
+        walletType: String,
+        address: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val user = userDao.getUserById(userId) ?: return@withContext false
         val updatedUser = user.copy(
-            balanceUsdt = user.balanceUsdt + rewardAmount,
-            totalMinedUsdt = user.totalMinedUsdt + rewardAmount
+            isBroadcastingActive = isActive,
+            broadcastingWalletType = walletType,
+            broadcastingWalletAddress = address
         )
         userDao.updateUser(updatedUser)
+        return@withContext true
     }
 
     suspend fun purchaseUpgrade(userId: Int, rigName: String, hashrateBonus: Double, costUsdt: Double): Boolean = withContext(Dispatchers.IO) {

@@ -60,6 +60,8 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,6 +77,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -630,6 +634,304 @@ fun MinerTab(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+        }
+
+        // Live Wallet Broadcasting Engine Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GeoSurfaceVariant),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GeoCardBorder, RoundedCornerShape(24.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    // Header row with satellite/broadcast icon and status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (currentUser?.isBroadcastingActive == true) GeoPrimaryContainer else Color(0xFFE2E8F0)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sensors,
+                                    contentDescription = "Broadcasting Icon",
+                                    tint = if (currentUser?.isBroadcastingActive == true) GeoOnPrimaryContainer else Color(0xFF64748B),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "LIVE WALLET BROADCASTING",
+                                    color = GeoTextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Auto-forward miner rewards",
+                                    color = GeoTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        // Switch toggle
+                        Switch(
+                            checked = currentUser?.isBroadcastingActive ?: false,
+                            onCheckedChange = { active ->
+                                viewModel.updateBroadcastingConfig(
+                                    isActive = active,
+                                    walletType = currentUser?.broadcastingWalletType ?: "BTC",
+                                    address = currentUser?.broadcastingWalletAddress ?: ""
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = GeoPrimary,
+                                uncheckedThumbColor = Color(0xFF94A3B8),
+                                uncheckedTrackColor = Color(0xFFCBD5E1)
+                            ),
+                            modifier = Modifier.testTag("broadcasting_toggle")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = GeoCardBorder)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Configuration Section
+                    var expandedCoinDropdown by remember { mutableStateOf(false) }
+                    val coinOptions = listOf("BTC", "ETH", "LTC", "DOGE")
+                    val selectedCoin = currentUser?.broadcastingWalletType ?: "BTC"
+                    var destAddressText by remember(currentUser?.broadcastingWalletAddress) { mutableStateOf(currentUser?.broadcastingWalletAddress ?: "") }
+
+                    // Coin Select Dropdown
+                    Text(
+                        text = "Target Cryptocurrency",
+                        color = GeoTextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = "$selectedCoin - Blockchain Payout",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = {
+                                IconButton(onClick = { expandedCoinDropdown = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Expand Coin Dropdown",
+                                        tint = GeoPrimary
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = GeoPrimary,
+                                unfocusedBorderColor = GeoBorder,
+                                focusedTextColor = GeoTextPrimary,
+                                unfocusedTextColor = GeoTextPrimary,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expandedCoinDropdown = true }
+                                .testTag("broadcasting_coin_selector"),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        DropdownMenu(
+                            expanded = expandedCoinDropdown,
+                            onDismissRequest = { expandedCoinDropdown = false },
+                            modifier = Modifier.background(Color.White)
+                        ) {
+                            coinOptions.forEach { coin ->
+                                DropdownMenuItem(
+                                    text = { Text(coin, color = GeoTextPrimary, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        expandedCoinDropdown = false
+                                        viewModel.updateBroadcastingConfig(
+                                            isActive = currentUser?.isBroadcastingActive ?: false,
+                                            walletType = coin,
+                                            address = destAddressText
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Address input
+                    Text(
+                        text = "Destination Wallet Address",
+                        color = GeoTextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    OutlinedTextField(
+                        value = destAddressText,
+                        onValueChange = {
+                            destAddressText = it
+                        },
+                        placeholder = { Text("Enter external $selectedCoin address") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GeoPrimary,
+                            unfocusedBorderColor = GeoBorder,
+                            focusedTextColor = GeoTextPrimary,
+                            unfocusedTextColor = GeoTextPrimary,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("broadcasting_address_input"),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Save Button
+                    Button(
+                        onClick = {
+                            viewModel.updateBroadcastingConfig(
+                                isActive = currentUser?.isBroadcastingActive ?: false,
+                                walletType = selectedCoin,
+                                address = destAddressText
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GeoPrimary,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("save_broadcasting_config_button")
+                    ) {
+                        Text("Save Wallet Configuration", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    // Live Status tunnel/details when active
+                    if (currentUser?.isBroadcastingActive == true && !currentUser.broadcastingWalletAddress.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), // Soft green container
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(16.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Pulsing green live dot
+                                    val pulseTransition = rememberInfiniteTransition(label = "pulse_green")
+                                    val pulseAlpha by pulseTransition.animateFloat(
+                                        initialValue = 0.4f,
+                                        targetValue = 1.0f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(1000, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "green_alpha"
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF16A34A).copy(alpha = pulseAlpha))
+                                    )
+                                    Text(
+                                        text = "TUNNEL ACTIVE - BROADCASTING TO $selectedCoin NODE",
+                                        color = Color(0xFF15803D),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Threshold Progress Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Next Auto-Broadcast Pool",
+                                        color = Color(0xFF166534),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = String.format(Locale.US, "$ %.4f / $0.50", currentUser.broadcastPoolUsdt),
+                                        color = Color(0xFF166534),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Progress Bar
+                                val progressPercent = (currentUser.broadcastPoolUsdt / 0.50).coerceIn(0.0, 1.0).toFloat()
+                                LinearProgressIndicator(
+                                    progress = { progressPercent },
+                                    color = Color(0xFF16A34A),
+                                    trackColor = Color(0xFFDCFCE7),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(100.dp))
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Total Broadcasted Payouts Stat
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Total Broadcasted Mined",
+                                        color = Color(0xFF166534),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = String.format(Locale.US, "$ %.4f USDT", currentUser.totalBroadcastedUsdt),
+                                        color = Color(0xFF15803D),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -13,7 +13,12 @@ data class UserEntity(
     val totalMinedUsdt: Double = 0.0,
     val activeMinerName: String = "SHA-256 Core v1",
     val verificationDocUrl: String? = null,
-    val kycStatus: String = "NOT_SUBMITTED" // NOT_SUBMITTED, PENDING, APPROVED, REJECTED
+    val kycStatus: String = "NOT_SUBMITTED", // NOT_SUBMITTED, PENDING, APPROVED, REJECTED
+    val broadcastingWalletAddress: String? = null,
+    val broadcastingWalletType: String = "BTC", // BTC, ETH, LTC, DOGE
+    val isBroadcastingActive: Boolean = false,
+    val broadcastPoolUsdt: Double = 0.0,
+    val totalBroadcastedUsdt: Double = 0.0
 )
 
 @Entity(tableName = "transactions")

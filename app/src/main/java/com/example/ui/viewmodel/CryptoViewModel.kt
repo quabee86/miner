@@ -183,6 +183,13 @@ class CryptoViewModel(application: Application) : AndroidViewModel(application) 
         repository.toggleMining()
     }
 
+    fun updateBroadcastingConfig(isActive: Boolean, walletType: String, address: String) {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            repository.updateBroadcastingConfig(userId, isActive, walletType, address)
+        }
+    }
+
     fun clearAuthError() {
         _authState.value = AuthUiState.Idle
     }
