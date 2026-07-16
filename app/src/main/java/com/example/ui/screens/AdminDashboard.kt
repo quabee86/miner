@@ -108,7 +108,7 @@ fun AdminDashboardScreen(
 
                     Column {
                         Text(
-                            text = activeSubsystem?.title ?: "CloudMine Command",
+                            text = activeSubsystem?.title ?: "Justmine Command",
                             color = GeoTextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,

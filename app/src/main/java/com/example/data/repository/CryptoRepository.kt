@@ -44,6 +44,10 @@ class CryptoRepository(context: Context) {
     private val _isAdmin = MutableStateFlow(false)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
+    // Is Firebase Cloud Backend Active
+    private val _isCloudBackendActive = MutableStateFlow(false)
+    val isCloudBackendActive: StateFlow<Boolean> = _isCloudBackendActive.asStateFlow()
+
     // Live Blockchain Prices & Stats State
     private val _blockchainState = MutableStateFlow(LiveBlockchainState())
     val blockchainState: StateFlow<LiveBlockchainState> = _blockchainState.asStateFlow()
@@ -73,37 +77,55 @@ class CryptoRepository(context: Context) {
     // Broadcast Announcements
     private val _announcements = MutableStateFlow<List<String>>(
         listOf(
-            "CloudMine Network: SHA-256 cloud mining cluster is fully operational at 99.8% capacity.",
+            "Justmine Network: SHA-256 cloud mining cluster is fully operational at 99.8% capacity.",
             "Security Update: Verify your identity in the KYC section to unlock instant high-volume withdrawals."
         )
     )
     val announcements: StateFlow<List<String>> = _announcements.asStateFlow()
 
     init {
+        // Check if Firebase Cloud Backend is active
+        try {
+            val hasApps = com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()
+            if (hasApps) {
+                // Try getting FirebaseAuth to ensure services are responsive
+                FirebaseAuth.getInstance()
+                _isCloudBackendActive.value = true
+                Log.d("CryptoRepository", "Firebase Cloud Backend active and verified")
+            } else {
+                _isCloudBackendActive.value = false
+            }
+        } catch (e: Exception) {
+            _isCloudBackendActive.value = false
+            Log.e("CryptoRepository", "Firebase is not available. Using robust offline Local Node Backend.", e)
+        }
+
         // Session restoration and Admin check on startup
         scope.launch {
             try {
-                val firebaseUser = FirebaseAuth.getInstance().currentUser
-                if (firebaseUser != null) {
-                    val email = firebaseUser.email ?: ""
-                    val username = email.substringBefore("@")
-                    var localUser = userDao.getUserByUsername(username)
-                    if (localUser == null && username.isNotEmpty()) {
-                        val newUser = UserEntity(
-                            username = username,
-                            passwordHash = "", // OAuth/Firebase managed
-                            balanceUsdt = 15.75,
-                            hashrateMhs = 2.5,
-                            totalMinedUsdt = 0.0,
-                            activeMinerName = "SHA-256 Core v1"
-                        )
-                        val id = userDao.insertUser(newUser)
-                        localUser = userDao.getUserById(id.toInt())
-                    }
-                    if (localUser != null) {
-                        _currentUserId.value = localUser.id
-                        _isMining.value = true
-                        _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
+                if (_isCloudBackendActive.value) {
+                    val firebaseUser = FirebaseAuth.getInstance().currentUser
+                    if (firebaseUser != null) {
+                        val email = firebaseUser.email ?: ""
+                        val username = email.substringBefore("@")
+                        var localUser = userDao.getUserByUsername(username)
+                        if (localUser == null && username.isNotEmpty()) {
+                            val newUser = UserEntity(
+                                username = username,
+                                passwordHash = "", // OAuth/Firebase managed
+                                balanceUsdt = 15.75,
+                                hashrateMhs = 2.5,
+                                totalMinedUsdt = 0.0,
+                                activeMinerName = "SHA-256 Core v1"
+                            )
+                            val id = userDao.insertUser(newUser)
+                            localUser = userDao.getUserById(id.toInt())
+                        }
+                        if (localUser != null) {
+                            _currentUserId.value = localUser.id
+                            _isMining.value = true
+                            _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -168,7 +190,7 @@ class CryptoRepository(context: Context) {
     }
 
     /**
-     * User Authentication Services using Firebase Auth
+     * User Authentication Services using Firebase Auth with fallback to Local Room database
      */
     suspend fun registerUser(username: String, password: String): Boolean = withContext(Dispatchers.IO) {
         if (username.isBlank() || password.isBlank()) return@withContext false
@@ -178,15 +200,21 @@ class CryptoRepository(context: Context) {
             return@withContext false // Username already exists in local DB
         }
 
-        val email = if (username.contains("@")) username else "$username@cloudmine.com"
+        val email = if (username.contains("@")) username else "$username@justmine.com"
 
-        // 1. Sign up with Firebase Auth
-        val auth = FirebaseAuth.getInstance()
-        val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-        val firebaseUser = authResult.user
-        if (firebaseUser != null) {
-            _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
-            saveUserToFirestore(firebaseUser.uid, email, username)
+        // 1. Sign up with Firebase Auth if available
+        if (_isCloudBackendActive.value) {
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+                val firebaseUser = authResult.user
+                if (firebaseUser != null) {
+                    _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
+                    saveUserToFirestore(firebaseUser.uid, email, username)
+                }
+            } catch (e: Exception) {
+                Log.w("CryptoRepository", "Firebase registration failed, falling back to local node", e)
+            }
         }
 
         val hashedPassword = hashPassword(password)
@@ -211,31 +239,51 @@ class CryptoRepository(context: Context) {
     suspend fun loginUser(username: String, password: String): Boolean = withContext(Dispatchers.IO) {
         if (username.isBlank() || password.isBlank()) return@withContext false
         
-        val email = if (username.contains("@")) username else "$username@cloudmine.com"
+        val email = if (username.contains("@")) username else "$username@justmine.com"
+        var firebaseSuccess = false
 
-        // 1. Authenticate with Firebase
-        val auth = FirebaseAuth.getInstance()
-        val authResult = auth.signInWithEmailAndPassword(email, password).await()
-        val firebaseUser = authResult.user
-        if (firebaseUser != null) {
-            _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
-            saveUserToFirestore(firebaseUser.uid, email, username)
+        // 1. Authenticate with Firebase if available
+        if (_isCloudBackendActive.value) {
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val authResult = auth.signInWithEmailAndPassword(email, password).await()
+                val firebaseUser = authResult.user
+                if (firebaseUser != null) {
+                    _isAdmin.value = firebaseUser.uid == "t0ZqQsbmcyfmYsT6YxxzeaRaiSp2"
+                    saveUserToFirestore(firebaseUser.uid, email, username)
+                    firebaseSuccess = true
+                }
+            } catch (e: Exception) {
+                Log.w("CryptoRepository", "Firebase auth failed, trying local node verification", e)
+            }
         }
 
-        // 2. Handle hybrid synchronization: ensure local user profile exists
+        // 2. Handle hybrid synchronization: ensure local user profile exists and password matches
         var existing = userDao.getUserByUsername(username)
         if (existing == null) {
-            val hashedPassword = hashPassword(password)
-            val newUser = UserEntity(
-                username = username,
-                passwordHash = hashedPassword,
-                balanceUsdt = 15.75, 
-                hashrateMhs = 2.5,
-                totalMinedUsdt = 0.0,
-                activeMinerName = "SHA-256 Core v1"
-            )
-            val id = userDao.insertUser(newUser)
-            existing = userDao.getUserById(id.toInt())
+            if (firebaseSuccess) {
+                val hashedPassword = hashPassword(password)
+                val newUser = UserEntity(
+                    username = username,
+                    passwordHash = hashedPassword,
+                    balanceUsdt = 15.75, 
+                    hashrateMhs = 2.5,
+                    totalMinedUsdt = 0.0,
+                    activeMinerName = "SHA-256 Core v1"
+                )
+                val id = userDao.insertUser(newUser)
+                existing = userDao.getUserById(id.toInt())
+            } else {
+                return@withContext false // User does not exist in local DB and Firebase authentication is unavailable/failed
+            }
+        } else {
+            // Local user exists. If Firebase authentication was not successful, verify local password hash
+            if (!firebaseSuccess) {
+                val hashedPassword = hashPassword(password)
+                if (existing.passwordHash != hashedPassword) {
+                    return@withContext false // Local password mismatch
+                }
+            }
         }
 
         if (existing != null) {
@@ -247,41 +295,60 @@ class CryptoRepository(context: Context) {
     }
 
     /**
-     * Firebase Storage KYC File Upload Service
+     * Firebase Storage KYC File Upload Service with fallback local simulation
      */
     suspend fun uploadKycDocument(userId: Int, fileUri: android.net.Uri, onProgress: (Double) -> Unit): String = withContext(Dispatchers.IO) {
-        val storageRef = FirebaseStorage.getInstance().reference
-            .child("kyc_documents/${userId}_${UUID.randomUUID()}.jpg")
+        if (_isCloudBackendActive.value) {
+            try {
+                val storageRef = FirebaseStorage.getInstance().reference
+                    .child("kyc_documents/${userId}_${UUID.randomUUID()}.jpg")
 
-        val uploadTask = storageRef.putFile(fileUri)
+                val uploadTask = storageRef.putFile(fileUri)
 
-        // Setup progress listener
-        uploadTask.addOnProgressListener { snapshot ->
-            if (snapshot.totalByteCount > 0) {
-                val progress = (100.0 * snapshot.bytesTransferred) / snapshot.totalByteCount
-                onProgress(progress)
+                // Setup progress listener
+                uploadTask.addOnProgressListener { snapshot ->
+                    if (snapshot.totalByteCount > 0) {
+                        val progress = (100.0 * snapshot.bytesTransferred) / snapshot.totalByteCount
+                        onProgress(progress)
+                    }
+                }
+
+                // Wait for upload to complete
+                uploadTask.await()
+
+                // Retrieve secure download URL
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                // Update database state with URL to trigger immediate Compose reactivity
+                val user = userDao.getUserById(userId)
+                if (user != null) {
+                    userDao.updateUser(user.copy(verificationDocUrl = downloadUrl, kycStatus = "PENDING"))
+                }
+
+                // Save file entry in Firestore
+                val firebaseUser = FirebaseAuth.getInstance().currentUser
+                if (firebaseUser != null) {
+                    addUploadedFileToFirestore(firebaseUser.uid, downloadUrl)
+                }
+
+                return@withContext downloadUrl
+            } catch (e: Exception) {
+                Log.e("CryptoRepository", "Firebase Storage failed, reverting to simulated local upload", e)
             }
         }
 
-        // Wait for upload to complete
-        uploadTask.await()
-
-        // Retrieve secure download URL
-        val downloadUrl = storageRef.downloadUrl.await().toString()
-
-        // Update database state with URL to trigger immediate Compose reactivity
+        // Simulate a local file upload with progress callbacks
+        for (p in 10..100 step 20) {
+            delay(250)
+            onProgress(p.toDouble())
+        }
+        
+        val simulatedUrl = fileUri.toString()
         val user = userDao.getUserById(userId)
         if (user != null) {
-            userDao.updateUser(user.copy(verificationDocUrl = downloadUrl, kycStatus = "PENDING"))
+            userDao.updateUser(user.copy(verificationDocUrl = simulatedUrl, kycStatus = "PENDING"))
         }
-
-        // Save file entry in Firestore
-        val firebaseUser = FirebaseAuth.getInstance().currentUser
-        if (firebaseUser != null) {
-            addUploadedFileToFirestore(firebaseUser.uid, downloadUrl)
-        }
-
-        return@withContext downloadUrl
+        return@withContext simulatedUrl
     }
 
     fun logout() {

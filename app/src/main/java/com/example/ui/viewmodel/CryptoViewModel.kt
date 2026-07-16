@@ -27,6 +27,7 @@ class CryptoViewModel(application: Application) : AndroidViewModel(application) 
     val currentUserId: StateFlow<Int?> = repository.currentUserId
     val isMining: StateFlow<Boolean> = repository.isMining
     val isAdmin: StateFlow<Boolean> = repository.isAdmin
+    val isCloudBackendActive: StateFlow<Boolean> = repository.isCloudBackendActive
     val blockchainState = repository.blockchainState
 
     // Admin state flows for Firestore users list

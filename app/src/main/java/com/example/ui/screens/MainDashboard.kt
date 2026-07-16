@@ -128,6 +128,7 @@ fun MainDashboardScreen(
     val isMining by viewModel.isMining.collectAsState()
     val blockchainState by viewModel.blockchainState.collectAsState()
     val transactions by viewModel.userTransactions.collectAsState()
+    val isCloudActive by viewModel.isCloudBackendActive.collectAsState()
     
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Miner, 1 = Server Upgrades, 2 = Live Withdrawals
 
@@ -159,7 +160,7 @@ fun MainDashboardScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bolt,
-                            contentDescription = "CloudMine Logo",
+                            contentDescription = "Justmine Logo",
                             tint = GeoOnPrimaryContainer,
                             modifier = Modifier.size(24.dp)
                         )
@@ -167,19 +168,30 @@ fun MainDashboardScreen(
 
                     Column {
                         Text(
-                            text = "CloudMine",
+                            text = "Justmine",
                             color = GeoTextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.5).sp
                         )
-                        Text(
-                            text = "BLOCKCHAIN NODE 04",
-                            color = GeoPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "BLOCKCHAIN NODE 04",
+                                color = GeoPrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isCloudActive) Color(0xFF81C784) else Color(0xFFFFB74D))
+                            )
+                        }
                     }
                 }
 
@@ -297,6 +309,7 @@ fun MinerTab(
     isMining: Boolean,
     blockchainState: LiveBlockchainState
 ) {
+    val isCloudActive by viewModel.isCloudBackendActive.collectAsState()
     // Infinitely spinning mining gears animation if mining
     val infiniteTransition = rememberInfiniteTransition(label = "gears")
     val gearRotation by infiniteTransition.animateFloat(
@@ -1227,9 +1240,10 @@ fun MinerTab(
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "Session is encrypted and logged locally.",
-                                color = GeoTextSecondary,
-                                fontSize = 11.sp
+                                text = if (isCloudActive) "Firebase Cloud Backend sync is ACTIVE" else "Simulated Local Node Backup is ACTIVE",
+                                color = if (isCloudActive) Color(0xFF81C784) else Color(0xFFFFB74D),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }

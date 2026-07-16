@@ -75,6 +75,7 @@ fun LoginScreen(
     modifier: Modifier = Modifier
 ) {
     val authState by viewModel.authState.collectAsState()
+    val isCloudActive by viewModel.isCloudBackendActive.collectAsState()
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -103,7 +104,7 @@ fun LoginScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Bolt,
-                    contentDescription = "CloudMine Crypto Logo",
+                    contentDescription = "Justmine Logo",
                     tint = GeoOnPrimaryContainer,
                     modifier = Modifier.size(44.dp)
                 )
@@ -112,7 +113,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "CloudMine",
+                text = "Justmine",
                 color = GeoTextPrimary,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -130,7 +131,11 @@ fun LoginScreen(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            BackendStatusBadge(isCloudActive = isCloudActive)
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Login Panel Card with Surface Variant & card border
             Card(
@@ -317,6 +322,7 @@ fun SignUpScreen(
     modifier: Modifier = Modifier
 ) {
     val authState by viewModel.authState.collectAsState()
+    val isCloudActive by viewModel.isCloudBackendActive.collectAsState()
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -345,7 +351,7 @@ fun SignUpScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Bolt,
-                    contentDescription = "CloudMine Crypto Logo",
+                    contentDescription = "Justmine Logo",
                     tint = GeoOnPrimaryContainer,
                     modifier = Modifier.size(44.dp)
                 )
@@ -369,7 +375,11 @@ fun SignUpScreen(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            BackendStatusBadge(isCloudActive = isCloudActive)
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Bonus Promotion Card using light primary container and red live sync theme
             Card(
@@ -592,5 +602,34 @@ fun SignUpScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun BackendStatusBadge(
+    isCloudActive: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (isCloudActive) Color(0xFF1B3B22) else Color(0xFF3B2F1B)
+    val textColor = if (isCloudActive) Color(0xFF81C784) else Color(0xFFFFB74D)
+    val borderColor = if (isCloudActive) Color(0xFF2E7D32) else Color(0xFFE65100)
+    val text = if (isCloudActive) "🟢 FIREBASE BACKEND ACTIVE" else "🟡 LOCAL OFFLINE NODE BACKUP"
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(backgroundColor)
+            .border(1.dp, borderColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = text,
+            color = textColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
     }
 }
